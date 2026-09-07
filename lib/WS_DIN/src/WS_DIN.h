@@ -12,7 +12,19 @@
 #define DIN_PIN_CH7      10     // DIN CH7  GPIO
 #define DIN_PIN_CH8      11     // DIN CH8  GPIO
 
-#define Relay_Immediate_Default   1       // Enable the input control relay
+#define Relay_Immediate_Default   0       // Enable the input control relay
 #define DIN_Inverse_Enable        1       // Input is reversed from control
 
+extern bool DIN_Flag[8];
+extern uint8_t DIN_Data;
+
 void DIN_Init(void);
+bool DIN_Read_CH1(void);
+bool DIN_Read_CH2(void);
+bool DIN_Read_CH3(void);
+bool DIN_Read_CH4(void);
+bool DIN_Read_CH5(void);
+bool DIN_Read_CH6(void);
+bool DIN_Read_CH7(void);
+bool DIN_Read_CH8(void);
+uint8_t DIN_Read_CHxs(void);
