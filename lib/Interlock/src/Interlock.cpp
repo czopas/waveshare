@@ -69,7 +69,7 @@ static unsigned long g_regenMs = REGEN_MS_DEFAULT;
 static unsigned long g_debounceMs = DEBOUNCE_MS_DEFAULT;
 static InterlockStatus g_status = {};
 
-static const char *kPhaseNames[] = {"READY", "UNLOCKED", "OPEN", "REGEN", "ALARM_BOTH_OPEN"};
+static const char *kPhaseNames[] = {"READY", "UNLOCKED", "OPEN", "REGEN", "ALARM"};
 
 const char *Interlock_PhaseName(uint8_t phase) {
   if (phase >= (sizeof(kPhaseNames) / sizeof(kPhaseNames[0]))) return "UNKNOWN";
@@ -107,7 +107,7 @@ bool Interlock_SetTimings(unsigned long lockReleaseMs, unsigned long regenMs, un
 
 /*******************************************************  Automat stanow  *******************************************************/
 
-enum Phase { PHASE_READY, PHASE_UNLOCKED, PHASE_OPEN, PHASE_REGEN, PHASE_ALARM_BOTH_OPEN };
+enum Phase { PHASE_READY, PHASE_UNLOCKED, PHASE_OPEN, PHASE_REGEN, PHASE_ALARM };
 enum ActiveWindow { WIN_NONE, WIN_1, WIN_2 };
 
 static Phase phase = PHASE_REGEN;
@@ -192,14 +192,24 @@ static void InterlockTask(void *parameter) {
 
     UpdateBlink();
 
-    bool bothOpen = !closed1Stable && !closed2Stable;
+    // Okno moze byc otwarte WYLACZNIE gdy jest aktywne i jest w trakcie autoryzowanego cyklu
+    // (UNLOCKED/OPEN) - w kazdej innej sytuacji (READY, REGEN, cudzy cykl, a takze oba naraz)
+    // otwarte okno jest anomalia: zaczep powinien trzymac je zablokowane, wiec fizyczne otwarcie
+    // oznacza usterke zaczepu albo wymuszenie z zewnatrz. Sprawdzamy to w kazdym cyklu, a nie
+    // tylko w chwili zamkniecia, wiec ponowne otwarcie w trakcie regeneracji/gotowosci tez zostanie
+    // wykryte, a nie dopiero przy nastepnym starcie cyklu.
+    bool win1AuthorizedOpen = (active == WIN_1) && (phase == PHASE_UNLOCKED || phase == PHASE_OPEN);
+    bool win2AuthorizedOpen = (active == WIN_2) && (phase == PHASE_UNLOCKED || phase == PHASE_OPEN);
+    bool win1UnexpectedOpen = !closed1Stable && !win1AuthorizedOpen;
+    bool win2UnexpectedOpen = !closed2Stable && !win2AuthorizedOpen;
+    bool anomaly = win1UnexpectedOpen || win2UnexpectedOpen;
 
     // Stan awaryjny ma pierwszenstwo nad normalnym automatem - blokada nie powinna do niego
-    // dopuscic, ale jesli oba okna sa jednak otwarte rownoczesnie, sygnalizujemy to natychmiast
+    // dopuscic, ale jesli mimo to wykryjemy nieautoryzowane otwarcie, sygnalizujemy to natychmiast
     // niezaleznie od tego, w jakiej fazie byl system wczesniej.
-    if (bothOpen && phase != PHASE_ALARM_BOTH_OPEN) {
+    if (anomaly && phase != PHASE_ALARM) {
       active = WIN_NONE;
-      EnterPhase(PHASE_ALARM_BOTH_OPEN);
+      EnterPhase(PHASE_ALARM);
     }
 
     switch (phase) {
@@ -265,11 +275,12 @@ static void InterlockTask(void *parameter) {
         }
         break;
 
-      case PHASE_ALARM_BOTH_OPEN:
+      case PHASE_ALARM:
         Lock_Engage(WIN1_LOCK_CH);
         Lock_Engage(WIN2_LOCK_CH);
         // Naprzemienne miganie: gdy blinkOn - zielona okna 1 i czerwona okna 2, w drugiej
-        // polowie cyklu odwrotnie.
+        // polowie cyklu odwrotnie. Ten sam wzor niezaleznie od tego, czy anomalia dotyczy
+        // jednego czy obu okien - w kazdym przypadku oznacza "nie podchodz, cos jest nie tak".
         Lamp_Set(WIN1_GREEN_CH, blinkOn);
         Lamp_Set(WIN1_RED_CH, !blinkOn);
         Lamp_Set(WIN2_GREEN_CH, !blinkOn);
@@ -278,7 +289,7 @@ static void InterlockTask(void *parameter) {
           if (blinkOn) Buzzer_Open(); else Buzzer_Closs();
         }
 
-        if (!bothOpen) {
+        if (!anomaly) {
           if (ALARM_BUZZER_ENABLED) Buzzer_Closs();
           // Po zdarzeniu awaryjnym wymuszamy pelny czas regeneracji jako dodatkowy margines
           // bezpieczenstwa, zamiast wracac od razu do gotowosci.

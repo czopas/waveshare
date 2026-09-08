@@ -89,7 +89,7 @@ const phaseNames = {
   UNLOCKED: 'ZADANIE (zaczep zwolniony)',
   OPEN: 'OTWARTE',
   REGEN: 'REGENERACJA',
-  ALARM_BOTH_OPEN: 'ALARM - OBA OKNA OTWARTE'
+  ALARM: 'ALARM - NIEAUTORYZOWANE OTWARCIE OKNA'
 };
 function fmtBool(v, onTxt, offTxt) {
   const span = document.createElement('span');

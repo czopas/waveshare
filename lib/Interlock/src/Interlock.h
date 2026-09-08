@@ -39,7 +39,7 @@
 
 // Buzzer alarmowy (stan "oba okna otwarte") - wylaczony na czas testow (bardzo glosny).
 // Ustawic na 1, gdy reszta logiki bedzie juz dzialac poprawnie.
-#define ALARM_BUZZER_ENABLED 0
+#define ALARM_BUZZER_ENABLED 1
 
 /*******************************************************  Status / API  *******************************************************/
 // Wartosci pola "phase" - patrz takze Interlock_PhaseName().
@@ -47,7 +47,7 @@
 #define IL_PHASE_UNLOCKED         1
 #define IL_PHASE_OPEN             2
 #define IL_PHASE_REGEN            3
-#define IL_PHASE_ALARM_BOTH_OPEN  4
+#define IL_PHASE_ALARM             4
 
 struct InterlockStatus {
   uint8_t phase;             // patrz IL_PHASE_* / Interlock_PhaseName()
